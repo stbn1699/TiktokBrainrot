@@ -19,6 +19,7 @@ positionHorizontaleBalle = 50
 positionVerticaleBalle = 150
 vitesseTrou = 2
 angleDApparition = 180 # Angle de la zone d'apparition des nouvelles balles (en degrés)
+sonCollision = pygame.mixer.Sound("collision.wav")
 EXIT_ANGLE_RANGE = (250, 290)  # Le "trou" en bas du cercle (en degrés)
 
 # Couleurs
@@ -56,6 +57,8 @@ class Ball:
         if dist + BALL_RADIUS > RADIUS:
             angle = math.atan2(dy, dx)
             if not (EXIT_ANGLE_RANGE[0] <= math.degrees(angle) % 360 <= EXIT_ANGLE_RANGE[1]):
+                # son de collision
+                sonCollision.play()
                 # Rebond
                 norm_x = dx / dist
                 norm_y = dy / dist
