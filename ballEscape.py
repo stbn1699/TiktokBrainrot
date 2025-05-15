@@ -41,36 +41,49 @@ class Ball:
         self.vx = vx
         self.vy = vy
         self.falling = False
+        self.has_exited = False
         # couleur random a chaque apparition
-        self.color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))  # Couleur aléatoire
+        self.color = (random.randint(100, 255), random.randint(100, 255), random.randint(100, 255))  # Couleur aléatoire
 
     def update(self):
         self.vy += GRAVITY
         self.x += self.vx
         self.y += self.vy
 
-        # Vérifie collision avec le bord du cercle
         dx = self.x - CENTER[0]
         dy = self.y - CENTER[1]
-        dist = math.sqrt(dx**2 + dy**2)
+        dist = math.sqrt(dx ** 2 + dy ** 2)
 
+        # Vérifie si la balle est en dehors du cercle, si elle est trop loin, on la retire (pour éviter les fuites de mémoire)
+        if dist > 2 * RADIUS:
+            return "remove"
+
+        # Vérifie si la balle est en dehors du cercle et si elle n'est pas tombée
         if dist + BALL_RADIUS > RADIUS:
             angle = math.atan2(dy, dx)
-            if not (EXIT_ANGLE_RANGE[0] <= math.degrees(angle) % 360 <= EXIT_ANGLE_RANGE[1]):
-                # son de collision
+            angle_deg = math.degrees(angle) % 360
+
+            # Vérifie si la balle est dans le trou
+            if EXIT_ANGLE_RANGE[0] <= angle_deg <= EXIT_ANGLE_RANGE[1] or (
+                    EXIT_ANGLE_RANGE[0] > EXIT_ANGLE_RANGE[1] and
+                    (angle_deg >= EXIT_ANGLE_RANGE[0] or angle_deg <= EXIT_ANGLE_RANGE[1])
+            ):
+                # Vérifie si la balle déja est tombée dans le trou, auquel cas on ne fait pas réapparaitre de nouvelles balles
+                if not self.has_exited:
+                    self.has_exited = True
+                    return "exit"
+            # Collision avec le bord du cercle, la balle rebondit
+            elif dist <= RADIUS + BALL_RADIUS:
+                # Collision avec le bord du cercle (hors du trou)
                 sonCollision.play()
-                # Rebond
                 norm_x = dx / dist
                 norm_y = dy / dist
                 dot = self.vx * norm_x + self.vy * norm_y
                 self.vx -= 2 * dot * norm_x
                 self.vy -= 2 * dot * norm_y
-                # Repositionne juste à l'intérieur
                 overlap = dist + BALL_RADIUS - RADIUS
                 self.x -= norm_x * overlap
                 self.y -= norm_y * overlap
-            else:
-                return "exit"
         return "ok"
 
     def draw(self, surface):
@@ -128,15 +141,15 @@ while True:
 
     for ball in balls:
         result = ball.update()
-        if result == "ok":
-            remaining_balls.append(ball)
-        else:
-            # Coordonnées fixes pour l'apparition des nouvelles balles
-            spawn_x, spawn_y = get_spawn_point(angleDApparition)
-            for _ in range(2):
-                vx = random.uniform(-2, 2)
-                vy = random.uniform(-5, -2)
-                new_balls.append(Ball(spawn_x, spawn_y, vx, vy))
+        if result == "ok" or result == "exit":
+            remaining_balls.append(ball)  # Keep the ball even if it exits
+            if result == "exit":
+                # Spawn new balls when the ball exits through the hole
+                spawn_x, spawn_y = get_spawn_point(angleDApparition)
+                for _ in range(2):
+                    vx = random.uniform(-2, 2)
+                    vy = random.uniform(-5, -2)
+                    new_balls.append(Ball(spawn_x, spawn_y, vx, vy))
 
     balls = remaining_balls + new_balls
 
