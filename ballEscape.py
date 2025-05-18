@@ -3,160 +3,185 @@ import sys
 import math
 import random
 
-# Initialisation
+# Initialisation de Pygame
 pygame.init()
-WIDTH, HEIGHT = 800, 800
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-clock = pygame.time.Clock()
 
-# Paramètres
-CENTER = (WIDTH // 2, HEIGHT // 2)
-RADIUS = 300
-BALL_RADIUS = 8
-GRAVITY = 0.3
-FPS = 60
-positionHorizontaleBalle = 50
-positionVerticaleBalle = 150
-vitesseTrou = 2
-angleDApparition = 180 # Angle de la zone d'apparition des nouvelles balles (en degrés)
-sonCollision = pygame.mixer.Sound("collision.wav")
-EXIT_ANGLE_RANGE = (250, 290)  # Le "trou" en bas du cercle (en degrés)
+# Dimensions de la fenêtre
+largeur, hauteur = 800, 800
+ecran = pygame.display.set_mode((largeur, hauteur))
 
-# Couleurs
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
+# Horloge pour contrôler le taux de rafraîchissement
+horloge = pygame.time.Clock()
 
-# Initialisation de la police
-font = pygame.font.Font(None, 36)  # Taille de la police : 36
+# Paramètres du jeu
+centre = (largeur // 2, hauteur // 2)  # Centre du cercle
+rayon = 300  # Rayon du cercle
+rayonBalle = 8  # Rayon des balles
+gravite = 0.3  # Force de gravité appliquée aux balles
+imagesParSeconde = 60  # Nombre d'images par seconde
+positionHorizontaleBalle = 50  # Position initiale horizontale de la balle
+positionVerticaleBalle = 150  # Position initiale verticale de la balle
+vitesseTrou = 2  # Vitesse de rotation du trou
+angleApparition = 180  # Angle de la zone d'apparition des nouvelles balles (en degrés)
+sonCollision = pygame.mixer.Sound("collision.wav")  # Son joué lors d'une collision
+plageAngleSortie = (250, 290)  # Plage angulaire du trou (en degrés)
 
-def draw_ball_counter(surface, count):
-    text = font.render(f"Balls: {count}", True, WHITE)
-    surface.blit(text, (WIDTH - 150, 20))  # Position en haut à droite
+# Couleurs utilisées dans le jeu
+blanc = (255, 255, 255)  # Couleur blanche
+noir = (0, 0, 0)  # Couleur noire
 
-# Balle
-class Ball:
+# Initialisation de la police pour afficher le compteur de balles
+police = pygame.font.Font(None, 36)  # Taille de la police : 36
+
+
+# Fonction pour dessiner le compteur de balles à l'écran
+def dessinerCompteurBalles(surface, compteur):
+    texte = police.render(f"Balls : {compteur}", True, blanc)  # Texte affiché
+    surface.blit(texte, (largeur - 150, 20))  # Position du texte en haut à droite
+
+
+# Classe représentant une balle
+class Balle:
     def __init__(self, x, y, vx=0, vy=0):
-        self.x = x
-        self.y = y
-        self.vx = vx
-        self.vy = vy
-        self.falling = False
-        self.has_exited = False
-        # couleur random a chaque apparition
-        self.color = (random.randint(100, 255), random.randint(100, 255), random.randint(100, 255))  # Couleur aléatoire
+        self.x = x  # Position horizontale de la balle
+        self.y = y  # Position verticale de la balle
+        self.vx = vx  # Vitesse horizontale de la balle
+        self.vy = vy  # Vitesse verticale de la balle
+        self.tombee = False  # Indique si la balle est tombée
+        self.estSortie = False  # Indique si la balle est sortie par le trou
+        # Couleur aléatoire attribuée à la balle
+        self.couleur = (random.randint(100, 255), random.randint(100, 255), random.randint(100, 255))
 
-    def update(self):
-        self.vy += GRAVITY
+    # Met à jour la position et l'état de la balle
+    def mettreAJour(self):
+        # Applique la gravité à la vitesse verticale
+        self.vy += gravite
+        # Met à jour les positions en fonction des vitesses
         self.x += self.vx
         self.y += self.vy
 
-        dx = self.x - CENTER[0]
-        dy = self.y - CENTER[1]
-        dist = math.sqrt(dx ** 2 + dy ** 2)
+        # Calcul de la distance entre la balle et le centre du cercle
+        dx = self.x - centre[0]
+        dy = self.y - centre[1]
+        distance = math.sqrt(dx ** 2 + dy ** 2)
 
-        # Vérifie si la balle est en dehors du cercle, si elle est trop loin, on la retire (pour éviter les fuites de mémoire)
-        if dist > 2 * RADIUS:
-            return "remove"
+        # Si la balle est trop loin du cercle, elle est supprimée
+        if distance > 2 * rayon:
+            return "supprimer"
 
-        # Vérifie si la balle est en dehors du cercle et si elle n'est pas tombée
-        if dist + BALL_RADIUS > RADIUS:
+        # Si la balle dépasse le bord du cercle
+        if distance + rayonBalle > rayon:
+            # Calcul de l'angle de la balle par rapport au centre
             angle = math.atan2(dy, dx)
-            angle_deg = math.degrees(angle) % 360
+            angleDeg = math.degrees(angle) % 360
 
-            # Vérifie si la balle est dans le trou
-            if EXIT_ANGLE_RANGE[0] <= angle_deg <= EXIT_ANGLE_RANGE[1] or (
-                    EXIT_ANGLE_RANGE[0] > EXIT_ANGLE_RANGE[1] and
-                    (angle_deg >= EXIT_ANGLE_RANGE[0] or angle_deg <= EXIT_ANGLE_RANGE[1])
+            # Vérifie si la balle est dans la plage angulaire du trou
+            if plageAngleSortie[0] <= angleDeg <= plageAngleSortie[1] or (
+                    plageAngleSortie[0] > plageAngleSortie[1] and
+                    (angleDeg >= plageAngleSortie[0] or angleDeg <= plageAngleSortie[1])
             ):
-                # Vérifie si la balle déja est tombée dans le trou, auquel cas on ne fait pas réapparaitre de nouvelles balles
-                if not self.has_exited:
-                    self.has_exited = True
-                    return "exit"
-            # Collision avec le bord du cercle, la balle rebondit
-            elif dist <= RADIUS + BALL_RADIUS:
-                # Collision avec le bord du cercle (hors du trou)
-                sonCollision.play()
-                norm_x = dx / dist
-                norm_y = dy / dist
-                dot = self.vx * norm_x + self.vy * norm_y
-                self.vx -= 2 * dot * norm_x
-                self.vy -= 2 * dot * norm_y
-                overlap = dist + BALL_RADIUS - RADIUS
-                self.x -= norm_x * overlap
-                self.y -= norm_y * overlap
+                # Si la balle passe par le trou, elle est marquée comme sortie
+                if not self.estSortie:
+                    self.estSortie = True
+                    return "sortie"
+            # Sinon, la balle rebondit sur le bord du cercle
+            elif distance <= rayon + rayonBalle:
+                sonCollision.play()  # Joue le son de collision
+                # Calcul de la normale au point de collision
+                normX = dx / distance
+                normY = dy / distance
+                # Calcul du produit scalaire pour ajuster les vitesses
+                produitScalaire = self.vx * normX + self.vy * normY
+                self.vx -= 2 * produitScalaire * normX
+                self.vy -= 2 * produitScalaire * normY
+                # Corrige le chevauchement entre la balle et le bord
+                chevauchement = distance + rayonBalle - rayon
+                self.x -= normX * chevauchement
+                self.y -= normY * chevauchement
         return "ok"
 
-    def draw(self, surface):
-        pygame.draw.circle(surface, self.color, (int(self.x), int(self.y)), BALL_RADIUS)
+    # Dessine la balle sur la surface donnée
+    def dessiner(self, surface):
+        pygame.draw.circle(surface, self.couleur, (int(self.x), int(self.y)), rayonBalle)
 
-# Initialisation des balles
-balls = [Ball(CENTER[0] + positionHorizontaleBalle, CENTER[0] - positionVerticaleBalle)]
 
-# Fonction pour calculer les coordonnées à partir d'un angle
-def get_spawn_point(angle):
-    rad = math.radians(random.randint(0, angle) + -angle) # Angle aléatoire dans la zone d'apparition entre 0 et angle, mois l'angle pour que ce soit au centre en haut
-    x = CENTER[0] + RADIUS * math.cos(rad)
-    y = CENTER[1] + RADIUS * math.sin(rad)
+# Initialisation de la liste des balles avec une balle de départ
+balles = [Balle(centre[0] + positionHorizontaleBalle, centre[0] - positionVerticaleBalle)]
+
+
+# Fonction pour calculer les coordonnées d'apparition d'une balle à partir d'un angle
+def obtenirPointApparition(angle):
+    rad = math.radians(random.randint(0, angle) + -angle)  # Angle aléatoire dans la plage donnée
+    x = centre[0] + rayon * math.cos(rad)  # Coordonnée X
+    y = centre[1] + rayon * math.sin(rad)  # Coordonnée Y
     return x, y
 
-# Boucle principale
+
+# Boucle principale du jeu
 while True:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+    # Gestion des événements
+    for evenement in pygame.event.get():
+        if evenement.type == pygame.QUIT:  # Si l'utilisateur ferme la fenêtre
             pygame.quit()
             sys.exit()
 
-    screen.fill(BLACK)
+    # Remplit l'écran avec la couleur noire
+    ecran.fill(noir)
 
-    # Met à jour les angles du trou
-    EXIT_ANGLE_RANGE = (
-        (EXIT_ANGLE_RANGE[0] + vitesseTrou) % 360,
-        (EXIT_ANGLE_RANGE[1] + vitesseTrou) % 360,
+    # Met à jour les angles du trou (rotation)
+    plageAngleSortie = (
+        (plageAngleSortie[0] + vitesseTrou) % 360,
+        (plageAngleSortie[1] + vitesseTrou) % 360,
     )
 
-    # Cercle + trou (juste un arc de cercle qui n'est pas terminé)
-    angle1 = math.radians(EXIT_ANGLE_RANGE[0])
-    angle2 = math.radians(EXIT_ANGLE_RANGE[1])
-    steps = 100
-    for i in range(steps):
-        a1 = i / steps * 2 * math.pi
-        # Cas où le trou traverse 0°, sinon il disparait
-        if EXIT_ANGLE_RANGE[0] > EXIT_ANGLE_RANGE[1]:
+    # Dessine le cercle avec le trou (arc de cercle non fermé)
+    angle1 = math.radians(plageAngleSortie[0])
+    angle2 = math.radians(plageAngleSortie[1])
+    etapes = 100  # Nombre de segments pour dessiner le cercle
+    for i in range(etapes):
+        a1 = i / etapes * 2 * math.pi
+        if plageAngleSortie[0] > plageAngleSortie[1]:
             if not (a1 >= angle1 or a1 <= angle2):
-                x1 = CENTER[0] + RADIUS * math.cos(a1)
-                y1 = CENTER[1] + RADIUS * math.sin(a1)
-                x2 = CENTER[0] + RADIUS * math.cos(a1 + 2 * math.pi / steps)
-                y2 = CENTER[1] + RADIUS * math.sin(a1 + 2 * math.pi / steps)
-                pygame.draw.line(screen, WHITE, (x1, y1), (x2, y2), 2)
+                x1 = centre[0] + rayon * math.cos(a1)
+                y1 = centre[1] + rayon * math.sin(a1)
+                x2 = centre[0] + rayon * math.cos(a1 + 2 * math.pi / etapes)
+                y2 = centre[1] + rayon * math.sin(a1 + 2 * math.pi / etapes)
+                pygame.draw.line(ecran, blanc, (x1, y1), (x2, y2), 2)
         else:
             if not (angle1 <= a1 <= angle2):
-                x1 = CENTER[0] + RADIUS * math.cos(a1)
-                y1 = CENTER[1] + RADIUS * math.sin(a1)
-                x2 = CENTER[0] + RADIUS * math.cos(a1 + 2 * math.pi / steps)
-                y2 = CENTER[1] + RADIUS * math.sin(a1 + 2 * math.pi / steps)
-                pygame.draw.line(screen, WHITE, (x1, y1), (x2, y2), 2)
+                x1 = centre[0] + rayon * math.cos(a1)
+                y1 = centre[1] + rayon * math.sin(a1)
+                x2 = centre[0] + rayon * math.cos(a1 + 2 * math.pi / etapes)
+                y2 = centre[1] + rayon * math.sin(a1 + 2 * math.pi / etapes)
+                pygame.draw.line(ecran, blanc, (x1, y1), (x2, y2), 2)
 
-    new_balls = []
-    remaining_balls = []
+    # Gestion des balles
+    nouvellesBalles = []  # Liste des nouvelles balles à ajouter
+    ballesRestantes = []  # Liste des balles qui restent dans le jeu
 
-    for ball in balls:
-        result = ball.update()
-        if result == "ok" or result == "exit":
-            remaining_balls.append(ball)  # Keep the ball even if it exits
-            if result == "exit":
-                # Spawn new balls when the ball exits through the hole
-                spawn_x, spawn_y = get_spawn_point(angleDApparition)
-                for _ in range(2):
-                    vx = random.uniform(-2, 2)
-                    vy = random.uniform(-5, -2)
-                    new_balls.append(Ball(spawn_x, spawn_y, vx, vy))
+    for balle in balles:
+        resultat = balle.mettreAJour()  # Met à jour la balle
+        if resultat == "ok" or resultat == "sortie":
+            ballesRestantes.append(balle)  # Garde la balle si elle est encore active
+            if resultat == "sortie":  # Si la balle sort par le trou
+                spawnX, spawnY = obtenirPointApparition(angleApparition)
+                for _ in range(2):  # Ajoute deux nouvelles balles
+                    vx = random.uniform(-2, 2)  # Vitesse horizontale aléatoire
+                    vy = random.uniform(-5, -2)  # Vitesse verticale aléatoire
+                    nouvellesBalles.append(Balle(spawnX, spawnY, vx, vy))
 
-    balls = remaining_balls + new_balls
+    # Met à jour la liste des balles
+    balles = ballesRestantes + nouvellesBalles
 
-    # Affiche les balles
-    for ball in balls:
-        ball.draw(screen)
+    # Dessine toutes les balles
+    for balle in balles:
+        balle.dessiner(ecran)
 
-    draw_ball_counter(screen, len(balls))
+    # Affiche le compteur de balles
+    dessinerCompteurBalles(ecran, len(balles))
+
+    # Met à jour l'affichage
     pygame.display.flip()
-    clock.tick(FPS)
+
+    # Contrôle le taux de rafraîchissement
+    horloge.tick(imagesParSeconde)
